@@ -1,0 +1,42 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Database
+db.sqlite3
+
+# Local Environment Variables
+.env
+.env.local
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Media Uploads & Vector Indexes
+backend/media/
+backend/faiss_indexes/
+
+# Node dependencies
+frontend/node_modules/
+node_modules/
+
+# Production Build outputs
+frontend/dist/
+dist/
+
+# Editor / System files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Python cache
+.pytest_cache/
+.mypy_cache/
