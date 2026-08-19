@@ -12,6 +12,7 @@ class OllamaService:
 
     @classmethod
     def _generate_response(cls, prompt):
+        ans = None
         # Check if Groq API key is defined in the environment
         groq_api_key = os.environ.get("GROQ_API_KEY")
         if groq_api_key and groq_api_key.strip():
@@ -40,33 +41,42 @@ class OllamaService:
                 response.raise_for_status()
                 data = response.json()
                 print("--- [LLM] Groq API response generation successful ---")
-                return data["choices"][0]["message"]["content"]
+                ans = data["choices"][0]["message"]["content"]
             except Exception as e:
                 logger.error(f"Groq API generation failed: {e}. Falling back to Ollama.")
                 print(f"!!! [LLM] ERROR: Groq API failed ({e}). Falling back to local Ollama... !!!")
 
-        # Fallback to local Ollama instance
-        try:
-            print(f"--- [LLM] Generating response using local Ollama ({cls.OLLAMA_MODEL}) ---")
-            logger.info(f"Generating response using local Ollama ({cls.OLLAMA_MODEL})")
-            response = requests.post(
-                cls.OLLAMA_URL,
-                json={
-                    "model": cls.OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=30
-            )
-            response.raise_for_status()
-            data = response.json()
-            print("--- [LLM] Ollama response generation successful ---")
-            return data["response"]
-        except Exception as e:
-            err_msg = f"Ollama generation failed: {e}"
-            logger.error(err_msg)
-            print(f"!!! [LLM] ERROR: Ollama generation failed: {e} !!!")
-            raise e
+        if ans is None:
+            # Fallback to local Ollama instance
+            try:
+                print(f"--- [LLM] Generating response using local Ollama ({cls.OLLAMA_MODEL}) ---")
+                logger.info(f"Generating response using local Ollama ({cls.OLLAMA_MODEL})")
+                response = requests.post(
+                    cls.OLLAMA_URL,
+                    json={
+                        "model": cls.OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "stream": False
+                    },
+                    timeout=30
+                )
+                response.raise_for_status()
+                data = response.json()
+                print("--- [LLM] Ollama response generation successful ---")
+                ans = data["response"]
+            except Exception as e:
+                err_msg = f"Ollama generation failed: {e}"
+                logger.error(err_msg)
+                print(f"!!! [LLM] ERROR: Ollama generation failed: {e} !!!")
+                raise e
+
+        if ans:
+            ans = ans.strip()
+
+        if not ans:
+            ans = "I could not find a clear answer in the provided documents. Please check the company's knowledge base or try rephrasing your question."
+
+        return ans
 
     @classmethod
     def generate_answer(
