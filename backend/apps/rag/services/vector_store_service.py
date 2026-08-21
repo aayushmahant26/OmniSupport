@@ -32,6 +32,10 @@ class VectorStoreService:
             "float32"
         )
 
+        # Normalize vector for Cosine Similarity (Inner Product)
+        import faiss
+        faiss.normalize_L2(vector)
+
         # This adds the vector to the FAISS index.
         FAISSService.add_vector(
             company_id,

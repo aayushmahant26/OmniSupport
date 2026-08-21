@@ -22,9 +22,9 @@ class FAISSService:
         company_id
     ):
 
-        # This creates a new FAISS index using IndexFlatL2.
-        # IndexFlatL2 is a simple FAISS index that stores all vectors and performs an exhaustive search.
-        index = faiss.IndexFlatL2(
+        # This creates a new FAISS index using IndexFlatIP.
+        # IndexFlatIP is a simple FAISS index that stores all vectors and performs an exhaustive inner product search.
+        index = faiss.IndexFlatIP(
             cls.DIMENSION
         )
 

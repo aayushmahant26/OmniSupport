@@ -36,6 +36,10 @@ class RetrievalService:
             "float32" # converts the values to 32-bit floating point numbers because FAISS commonly expects vectors in float32 format.
         )
 
+        # Normalize query vector for Cosine Similarity (Inner Product)
+        import faiss
+        faiss.normalize_L2(query_vector)
+
         # this searches the FAISS index for the most relevant chunks.
         chunk_positions = (
             FAISSService.search(

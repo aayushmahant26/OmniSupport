@@ -3,8 +3,8 @@ class TextSplitter:
     @staticmethod
     def split_text( # this method is called to split the extracted text into chunks
         text,
-        chunk_size=500, # every chunk will contain atmost 500 characters (not words)
-        overlap=100 # the overlap between consecutive chunks is 100 characters
+        chunk_size=1000, # every chunk will contain atmost 1000 characters (not words)
+        overlap=200 # the overlap between consecutive chunks is 200 characters
     ):
 
         # list to store the chunks
