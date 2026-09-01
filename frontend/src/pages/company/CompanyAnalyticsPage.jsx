@@ -534,7 +534,17 @@ export const CompanyAnalyticsPage = () => {
                       </div>
                     )}
 
-                    {(detailModal.type === 'helpful' || detailModal.type === 'unhelpful') && (
+                    {detailModal.type === 'helpful' && (
+                      <div className="flex flex-col gap-2">
+                        {/* Question */}
+                        <div className="flex gap-2.5 items-start">
+                          <span className="text-xs font-bold text-primary px-1.5 py-0.5 rounded bg-primary/10 flex-shrink-0">Q</span>
+                          <p className="text-xs font-semibold text-textPrimary leading-relaxed">{item.question}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {detailModal.type === 'unhelpful' && (
                       <div className="flex flex-col gap-2">
                         {/* Question */}
                         <div className="flex gap-2.5 items-start">
@@ -546,15 +556,13 @@ export const CompanyAnalyticsPage = () => {
                           <span className="text-xs font-bold text-accentPurple px-1.5 py-0.5 rounded bg-accentPurple/10 flex-shrink-0">A</span>
                           <p className="text-xs text-textSecondary leading-relaxed italic">{item.answer?.replace(/[I|l](?=\d)/g, '')}</p>
                         </div>
-                        {detailModal.type === 'unhelpful' && (
-                          <div className="text-[10px] font-semibold flex items-center gap-1.5 mt-1">
-                            {item.feedback_missing_data ? (
-                              <span className="text-warning">⚠️ Flagged as missing knowledge base data</span>
-                            ) : (
-                              <span className="text-textSecondary">👎 Marked unhelpful (generic reasoning)</span>
-                            )}
-                          </div>
-                        )}
+                        <div className="text-[10px] font-semibold flex items-center gap-1.5 mt-1">
+                          {item.feedback_missing_data ? (
+                            <span className="text-warning">⚠️ Flagged as missing knowledge base data</span>
+                          ) : (
+                            <span className="text-textSecondary">👎 Marked unhelpful (generic reasoning)</span>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

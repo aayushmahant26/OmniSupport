@@ -214,7 +214,7 @@ Missing Data Summary:"""
         prompt = f"""
 You are an expert customer experience analyst and knowledge base optimizer.
 Analyze the following customer support metrics and unhelpful bot replies for {company_name}.
-Write a highly professional, detailed executive summary report in Markdown.
+Write a highly professional, detailed executive summary report.
 
 Metrics:
 - Total questions asked by customers: {total_questions}
@@ -230,7 +230,12 @@ Provide a comprehensive analysis split into the following sections:
 3. Identified Knowledge Gaps: Highlight specific topics or questions that the chatbot failed to resolve because information was missing from the knowledge base.
 4. Actionable KB Recommendations: Formulate concrete, detailed recommendations of what policies, FAQs, or documents should be uploaded or created to resolve these gaps and improve the assistant's performance.
 
-Do not use double asterisks (**) for bolding, use plain text or standard formatting without bolding. Maintain a constructive, strategic, and professional tone.
+Constraints on formatting:
+- Do NOT use markdown or text-based tables anywhere in the report. Present metrics as clean bullet lists instead.
+- Use standard hyphens (-) for bullet points.
+- Do NOT use markdown headers (like #, ##, ###) or double asterisks (**) for bolding. Use standard capitalized section titles instead.
+- Ensure single empty lines are placed between paragraphs and sections to improve spacing and readability.
+- Maintain a constructive, strategic, and professional tone.
 """
         return cls._generate_response(prompt)
 
