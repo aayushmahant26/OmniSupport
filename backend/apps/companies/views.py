@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status, generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from django.shortcuts import get_object_or_404
 
 from django.utils import timezone
 from datetime import timedelta
@@ -11,8 +12,6 @@ from django.db.models import Count, Min, Max
 from apps.chat.models import ChatSession, ChatMessage
 
 from .models import Company, FavoriteCompanyCategory
-from .serializers import CompanySerializer
-
 from rest_framework.parsers import MultiPartParser
 from .serializers import (
     CompanySerializer,
@@ -47,8 +46,11 @@ class MyCompanyView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
+        if self.request.user.role != "company":
+            raise PermissionDenied("Only company users can access company profile details.")
 
-        return Company.objects.get(
+        return get_object_or_404(
+            Company,
             owner=self.request.user
         )
     
@@ -85,9 +87,12 @@ class CompanyLogoUploadView(generics.UpdateAPIView):
     parser_classes = [MultiPartParser] # Allows file uploads
 
     def get_object(self):
+        if self.request.user.role != "company":
+            raise PermissionDenied("Only company users can upload a company logo.")
 
         # Returns the company owned by the logged-in user.
-        return Company.objects.get(
+        return get_object_or_404(
+            Company,
             owner=self.request.user
         )
 
@@ -97,8 +102,11 @@ class UpdateCompanyView(generics.UpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
+        if self.request.user.role != "company":
+            raise PermissionDenied("Only company users can update company details.")
 
-        return Company.objects.get(
+        return get_object_or_404(
+            Company,
             owner=self.request.user
         )
 
@@ -253,73 +261,87 @@ class CompanyAnalyticsView(APIView):
             for cust in active_customers
         ]
 
-        # 4. shows last 100 helpful answers list
-        helpful_msgs = ChatMessage.objects.filter(
+        # 4. Fetch last 100 helpful answers list
+        helpful_msgs = list(ChatMessage.objects.filter(
             session__company=company,
             role="ASSISTANT",
             feedback="helpful"
-        ).order_by("-created_at")[:100]
+        ).order_by("-created_at")[:100])
 
-        helpful_list = []
-        for msg in helpful_msgs:
-            user_msg = ChatMessage.objects.filter(
-                session=msg.session,
-                role="USER",
-                created_at__lt=msg.created_at
-            ).order_by("-created_at").first()
-
-            helpful_list.append({
-                "id": str(msg.id),
-                "question": user_msg.content if user_msg else "Unknown question",
-                "answer": msg.content,
-                "created_at": msg.created_at.isoformat()
-            })
-
-        # 5. shows last 100 unhelpful answers list
-        unhelpful_msgs = ChatMessage.objects.filter(
+        # 5. Fetch last 100 unhelpful answers list
+        unhelpful_msgs = list(ChatMessage.objects.filter(
             session__company=company,
             role="ASSISTANT",
             feedback="unhelpful"
-        ).order_by("-created_at")[:100]
+        ).order_by("-created_at")[:100])
 
-        unhelpful_list = []
-        for msg in unhelpful_msgs:
-            user_msg = ChatMessage.objects.filter(
-                session=msg.session,
-                role="USER",
-                created_at__lt=msg.created_at
-            ).order_by("-created_at").first()
-
-            unhelpful_list.append({
-                "id": str(msg.id),
-                "question": user_msg.content if user_msg else "Unknown question",
-                "answer": msg.content,
-                "feedback_missing_data": msg.feedback_missing_data,
-                "created_at": msg.created_at.isoformat()
-            })
-
-        # 6. shows last 50 Missing Data (Gaps) List
-        gaps = ChatMessage.objects.filter(
+        # 6. Fetch last 50 Missing Data (Gaps) List
+        gaps = list(ChatMessage.objects.filter(
             session__company=company,
             role="ASSISTANT",
             feedback="unhelpful",
             feedback_missing_data=True
-        ).order_by("-created_at")[:50]
+        ).order_by("-created_at")[:50])
 
-        gaps_list = []
-        for gap in gaps:
-            user_msg = ChatMessage.objects.filter(
-                session=gap.session,
-                role="USER",
-                created_at__lt=gap.created_at
-            ).order_by("-created_at").first()
+        # OPTIMIZATION: Batch-fetch all preceding user questions in ONE single query to eliminate 250+ N+1 queries
+        all_session_ids = (
+            {m.session_id for m in helpful_msgs} |
+            {m.session_id for m in unhelpful_msgs} |
+            {g.session_id for g in gaps}
+        )
 
-            gaps_list.append({
+        user_messages_by_session = {}
+        if all_session_ids:
+            user_msgs_qs = ChatMessage.objects.filter(
+                session_id__in=all_session_ids,
+                role="USER"
+            ).order_by("session_id", "created_at").values("session_id", "content", "created_at")
+
+            for u in user_msgs_qs:
+                user_messages_by_session.setdefault(u["session_id"], []).append(u)
+
+        def find_preceding_question(session_id, assistant_created_at):
+            msgs = user_messages_by_session.get(session_id, [])
+            latest_q = None
+            for u in msgs:
+                if u["created_at"] < assistant_created_at:
+                    latest_q = u["content"]
+                else:
+                    break
+            return latest_q or "Unknown question"
+
+        helpful_list = [
+            {
+                "id": str(msg.id),
+                "question": find_preceding_question(msg.session_id, msg.created_at),
+                "answer": msg.content,
+                "created_at": msg.created_at.isoformat()
+            }
+            for msg in helpful_msgs
+        ]
+
+        unhelpful_list = [
+            {
+                "id": str(msg.id),
+                "question": find_preceding_question(msg.session_id, msg.created_at),
+                "answer": msg.content,
+                "feedback_missing_data": msg.feedback_missing_data,
+                "created_at": msg.created_at.isoformat()
+            }
+            for msg in unhelpful_msgs
+        ]
+
+        gaps_list = [
+            {
                 "id": str(gap.id),
                 "session_id": str(gap.session_id),
-                "summary": gap.missing_data_summary or (user_msg.content[:80] + "..." if user_msg else "Unknown missing information query"),
+                "summary": gap.missing_data_summary or (
+                    find_preceding_question(gap.session_id, gap.created_at)[:80] + "..."
+                ),
                 "created_at": gap.created_at.isoformat()
-            })
+            }
+            for gap in gaps
+        ]
 
         # --- Charts Data ---
         # Top 10 Most Asked Topics (grouping similar ones on the fly for cleaner reporting)
@@ -439,20 +461,30 @@ class CompanyAnalyticsReportView(APIView):
         satisfaction_score = (helpful_responses / total_rated * 100) if total_rated > 0 else 100.0
 
         # Fetch last 15 unhelpful QA pairs to feed LLM context
-        unhelpful_examples = ChatMessage.objects.filter(
+        unhelpful_examples = list(ChatMessage.objects.filter(
             session__company=company,
             role="ASSISTANT",
             feedback="unhelpful"
-        ).order_by("-created_at")[:15]
+        ).order_by("-created_at")[:15])
+
+        # Batch query user questions for the report
+        unhelpful_session_ids = {item.session_id for item in unhelpful_examples}
+        report_user_msgs = {}
+        if unhelpful_session_ids:
+            for u in ChatMessage.objects.filter(
+                session_id__in=unhelpful_session_ids,
+                role="USER"
+            ).order_by("session_id", "created_at").values("session_id", "content", "created_at"):
+                report_user_msgs.setdefault(u["session_id"], []).append(u)
 
         unhelpful_text = "" # stores last 15 assistant answers that users disliked.
         for idx, item in enumerate(unhelpful_examples):
-            user_msg = ChatMessage.objects.filter(
-                session=item.session,
-                role="USER",
-                created_at__lt=item.created_at
-            ).order_by("-created_at").first()
-            q_text = user_msg.content if user_msg else "N/A"
+            q_text = "N/A"
+            for u in report_user_msgs.get(item.session_id, []):
+                if u["created_at"] < item.created_at:
+                    q_text = u["content"]
+                else:
+                    break
             unhelpful_text += f"{idx+1}. Question: {q_text}\n   Answer Given: {item.content}\n   Flagged Missing Knowledge Base: {item.feedback_missing_data}\n\n"
 
         # pyrefly: ignore [missing-import]

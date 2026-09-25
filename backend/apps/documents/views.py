@@ -32,12 +32,25 @@ class DocumentUploadView(generics.CreateAPIView): # CreateAPIView means POST req
                 "Only company users can upload documents."
             )
 
-        # Document needs a company
-        # Frontend doesn't send company ID.
-        # Backend figures it out from the logged-in user.
-        company = Company.objects.get(
-            owner=self.request.user
-        )
+        try:
+            company = Company.objects.get(
+                owner=self.request.user
+            )
+        except Company.DoesNotExist:
+            raise PermissionDenied(
+                "Please create your company profile before uploading documents."
+            )
+
+        # File format and size validation
+        uploaded_file = self.request.FILES.get("file")
+        if uploaded_file:
+            ext = uploaded_file.name.lower().split('.')[-1]
+            if ext not in ['pdf', 'txt']:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"file": "Only PDF and TXT documents are supported."})
+            if uploaded_file.size > 25 * 1024 * 1024:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({"file": "File size exceeds the 25MB limit."})
 
         # save the document
         document = serializer.save(
@@ -55,41 +68,51 @@ class CompanyDocumentListView(generics.ListAPIView): # ListAPIView means GET req
     permission_classes = [IsAuthenticated] # Only logged in user can list their documents
 
     def get_queryset(self): # this method is called when a GET request is made
+        if self.request.user.role != "company":
+            return Document.objects.none()
 
-        # Document needs a company
-        # Frontend doesn't send company ID.
-        # Backend figures it out from the logged-in user.
-        company = Company.objects.get(
-            owner=self.request.user
-        )
-
-        # Get all documents for this company
-        return Document.objects.filter(
-            company=company
-        )
+        try:
+            company = Company.objects.get(
+                owner=self.request.user
+            )
+            return Document.objects.filter(
+                company=company
+            )
+        except Company.DoesNotExist:
+            return Document.objects.none()
 
 class DeleteDocumentView(generics.DestroyAPIView): # DestroyAPIView means DELETE request
 
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
 
-    # This method returns only documents belonging to the logged-in company.
-    # That means a company cannot delete another company's document,
-    # because DRF will only look for the object inside this filtered queryset.
     def get_queryset(self): 
+        if self.request.user.role != "company":
+            return Document.objects.none()
 
-        company = Company.objects.get(
-            owner=self.request.user
-        )
-
-        # Get all documents for this company
-        return Document.objects.filter(
-            company=company
-        )
+        try:
+            company = Company.objects.get(
+                owner=self.request.user
+            )
+            return Document.objects.filter(
+                company=company
+            )
+        except Company.DoesNotExist:
+            return Document.objects.none()
 
     def perform_destroy(self, instance): # this method is called when a DELETE request is made
 
         company_id = instance.company.id
+
+        # Delete physical file from disk to avoid orphan uploads
+        if instance.file:
+            try:
+                import os
+                if os.path.isfile(instance.file.path):
+                    os.remove(instance.file.path)
+            except Exception:
+                pass
+
         instance.delete()
 
         # pyrefly: ignore [missing-import]

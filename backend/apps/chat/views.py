@@ -29,15 +29,6 @@ from .serializers import (
     ChatSessionSerializer
 )
 
-from .models import (
-    ChatSession,
-    ChatMessage
-)
-
-from .serializers import (
-    ChatSessionSerializer
-)
-
 class CreateSessionView(APIView):
 
     # this makes sure only logged-in user create chat sessions
@@ -244,6 +235,9 @@ class ChatMessageFeedbackView(APIView):
                 
                 # this sets the missing data summary to a default message
                 message.missing_data_summary = "Customer query missing information"
+        else:
+            # Clear stale gap summary if feedback is helpful or not flagged as missing knowledge
+            message.missing_data_summary = None
 
         # this updates the chat message with the feedback
         message.save(update_fields=["feedback", "feedback_missing_data", "missing_data_summary"])

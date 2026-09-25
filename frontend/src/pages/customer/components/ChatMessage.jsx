@@ -33,7 +33,6 @@ export const ChatMessage = ({ msg, onFeedbackSubmitted, companyLogo, activeCompa
           
           <div className="flex-grow pre-wrap whitespace-pre-wrap">
             {msg.content
-              .replace(/[I|l](?=\d)/g, '')
               .replace(/\*\*/g, '')
               .replace(/\n{3,}/g, '\n\n')
               .trim()}

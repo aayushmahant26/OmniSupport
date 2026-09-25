@@ -32,6 +32,7 @@ from .services.comparison_service import (
 )
 
 class RetrievalTestView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
 
@@ -60,6 +61,7 @@ class RetrievalTestView(APIView):
         })
     
 class CompanyChatView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(
         self,
@@ -72,6 +74,24 @@ class CompanyChatView(APIView):
             Company,
             id=company_id
         )
+
+        session = get_object_or_404(
+            ChatSession,
+            id=session_id
+        )
+
+        # Enforce customer ownership to prevent IDOR / session hijacking
+        if session.customer != request.user:
+            return Response(
+                {"error": "You do not have permission to access this chat session."},
+                status=403
+            )
+
+        if session.company_id != company.id:
+            return Response(
+                {"error": "This chat session does not belong to the requested company."},
+                status=400
+            )
 
         question = request.data.get(
             "question"
@@ -106,16 +126,12 @@ class CompanyChatView(APIView):
                 )
             )
 
-        session = (
-            get_object_or_404(
-            ChatSession,
-            id=session_id
-            )
-        )
-
+        # Classify topic on initial query
         if session.topic == "General Query" or not session.topic:
             session.topic = OllamaService.classify_topic(question)
-            session.save(update_fields=["topic"])
+
+        # Touch and save session so updated_at is always updated for analytics and sorting
+        session.save()
 
         ChatHistoryService.save_user_message(
             session,
@@ -198,6 +214,9 @@ class CompanyComparisonView(APIView):
                 role="ASSISTANT",
                 content=answer
             )
+
+            # Touch session so updated_at reflects recent activity
+            session.save()
 
             messages.append({
                 "company_id": str(c_id),
